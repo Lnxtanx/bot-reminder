@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  whatsapp_number String   @unique @map("whatsapp_number")
+  timezone        String?  @default("UTC")
+  created_at      DateTime @default(now()) @map("created_at")
+
+  reminders Reminder[]
+
+  @@map("users")
+}
+
+enum ReminderStatus {
+  pending
+  sent
+  failed
+}
+
+model Reminder {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  task       String
+  remind_at  DateTime @map("remind_at")
+  message_sid String?  @unique
+  status     ReminderStatus   @default(pending) // pending, sent, failed
+  created_at DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([remind_at, status], map: "idx_reminders_pending")
+  @@index([user_id], map: "idx_reminders_user_id")
+  @@map("reminders")
+}
