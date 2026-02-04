@@ -21,15 +21,25 @@ async function findOrCreateUser(whatsappNumber, timezone = 'UTC') {
 }
 
 /**
+ * Find user by WhatsApp number
+ */
+async function findUser(whatsappNumber) {
+    return await prisma.user.findUnique({
+        where: { whatsapp_number: whatsappNumber }
+    });
+}
+
+/**
  * Create a new reminder
  */
-async function createReminder(userId, task, remindAt) {
+async function createReminder(userId, task, remindAt, messageSid = null) {
     const reminder = await prisma.reminder.create({
         data: {
             user_id: userId,
             task: task,
             remind_at: remindAt,
-            status: 'pending'
+            status: 'pending',
+            message_sid: messageSid
         }
     });
 
@@ -91,6 +101,7 @@ async function markReminderFailed(reminderId) {
 module.exports = {
     prisma, // Export prisma client if needed elsewhere
     findOrCreateUser,
+    findUser,
     createReminder,
     getPendingReminders,
     markReminderSent,

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { parseMessage } = require('../services/openai');
 const { sendReminderConfirmation, sendMessage } = require('../services/twilio');
-const { findOrCreateUser, createReminder } = require('../db/queries');
+const { findOrCreateUser, findUser, createReminder } = require('../db/queries');
 const { toUTCDate, formatTimeForUser, isValidDatetime, isFutureDate } = require('../utils/time');
 
 /**
@@ -14,17 +14,36 @@ const { toUTCDate, formatTimeForUser, isValidDatetime, isFutureDate } = require(
  */
 router.post('/whatsapp', async (req, res) => {
     try {
-        // Extract WhatsApp number and message body from Twilio webhook
-        const from = req.body.From; // Format: whatsapp:+1234567890
+        // Extract WhatsApp number, message body, and MessageSid
+        let from = req.body.From; // Format: whatsapp:+1234567890
         const messageBody = req.body.Body;
+        const messageSid = req.body.MessageSid;
 
-        console.log(`Received message from ${from}: ${messageBody}`);
+        console.log(`Received message from ${from}: ${messageBody} (IDs: ${messageSid})`);
 
         // Validate required fields
         if (!from || !messageBody) {
             console.error('Missing required fields: From or Body');
             return res.status(400).send('Missing required fields');
         }
+
+        // 1. Normalize WhatsApp number
+        // Ensure it starts with "whatsapp:+" and follows E.164
+        if (!from.startsWith('whatsapp:+')) {
+            // Basic fix if it's just missing the prefix but has the number
+            if (from.startsWith('+')) {
+                from = `whatsapp:${from}`;
+            } else {
+                // Harder to normalize without assuming country code. 
+                // For now, log warning if strict format isn't met or rely on Twilio.
+                console.warn(`Warning: Phone number ${from} might not be in E.164 format.`);
+            }
+        }
+
+        // 2. Fetch User Context (Timezone)
+        // We need the user's timezone BEFORE parsing to correctly interpret "9am"
+        const existingUser = await findUser(from);
+        const userTimezone = existingUser?.timezone || 'Asia/Kolkata';
 
         // Parse message with AI (AI is parser only - no business logic)
         const parsed = await parseMessage(messageBody);
@@ -47,10 +66,11 @@ router.post('/whatsapp', async (req, res) => {
             return res.status(200).send('OK');
         }
 
-        const timezone = parsed.timezone || 'Asia/Kolkata';
+        // Use parsed timezone if provided (e.g. "9am EST"), otherwise fallback to user's pref
+        const finalTimezone = parsed.timezone || userTimezone;
 
         // Convert datetime to UTC for storage
-        const remindAtUTC = toUTCDate(parsed.datetime, timezone);
+        const remindAtUTC = toUTCDate(parsed.datetime, finalTimezone);
 
         // Validate reminder is in the future
         if (!isFutureDate(remindAtUTC)) {
@@ -58,16 +78,25 @@ router.post('/whatsapp', async (req, res) => {
             return res.status(200).send('OK');
         }
 
-        // Find or create user
-        const user = await findOrCreateUser(from, timezone);
+        // Find or create user (update timezone if new one detected)
+        const user = await findOrCreateUser(from, finalTimezone);
         console.log('User:', user.id);
 
-        // Create reminder
-        const reminder = await createReminder(user.id, parsed.task, remindAtUTC);
-        console.log('Reminder created:', reminder.id);
+        // 3. Create reminder (with Deduplication)
+        try {
+            const reminder = await createReminder(user.id, parsed.task, remindAtUTC, messageSid);
+            console.log('Reminder created:', reminder.id);
+        } catch (error) {
+            // Check for unique constraint violation on message_sid
+            if (error.code === 'P2002' && error.meta?.target?.includes('message_sid')) {
+                console.log(`Duplicate reminder request ignored (MessageSid: ${messageSid})`);
+                return res.status(200).send('OK'); // Idempotent success
+            }
+            throw error; // Re-throw other errors
+        }
 
         // Format time for user confirmation
-        const formattedTime = formatTimeForUser(remindAtUTC, timezone);
+        const formattedTime = formatTimeForUser(remindAtUTC, finalTimezone);
 
         // Send confirmation
         await sendReminderConfirmation(from, parsed.task, formattedTime);

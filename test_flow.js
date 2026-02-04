@@ -22,7 +22,8 @@ async function runTestFlow() {
             // 2. Mock User Message
             const mockMessage = {
                 From: 'whatsapp:+1234567890',
-                Body: 'Remind me to check the logs in 10 seconds'
+                Body: 'Remind me to check duplication in 10 seconds',
+                MessageSid: 'SM_FIXED_ID_123'
             };
 
             console.log('\n1. Sending Webhook Request:', mockMessage.Body);
