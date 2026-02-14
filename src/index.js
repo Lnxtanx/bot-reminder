@@ -42,7 +42,7 @@ app.listen(PORT, () => {
     console.log(`Webhook URL: http://localhost:${PORT}/webhook/whatsapp`);
 
     // Start the reminder scheduler
-    // startScheduler();
+    startScheduler();
 });
 
 // Graceful shutdown
