@@ -147,7 +147,9 @@ router.post('/whatsapp', async (req, res) => {
         }
 
         // Still return 200 to prevent Twilio from retrying
-        res.status(200).send('OK');
+        // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+        res.type('text/xml');
+        res.send('<Response></Response>');
     }
 });
 
