@@ -24,7 +24,9 @@ router.post('/whatsapp', async (req, res) => {
         const botNumber = process.env.TWILIO_WHATSAPP_NUMBER;
         if (botNumber && from === botNumber) {
             console.log('Ignoring own message from:', from);
-            return res.status(200).send('OK');
+            // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+            res.type('text/xml');
+            return res.send('<Response></Response>');
         }
 
         console.log(`Received message from ${from}: ${messageBody} (IDs: ${messageSid})`);
@@ -61,24 +63,32 @@ router.post('/whatsapp', async (req, res) => {
         if (parsed.error === 'AI services unavailable') {
             console.error('AI Service Error:', parsed.error);
             await sendMessage(from, "I'm currently overloaded and running low on fuel ⛽. Please try again in 10 minutes.");
-            return res.status(200).send('OK');
+            // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+            res.type('text/xml');
+            return res.send('<Response></Response>');
         }
 
         // Backend handles all decision making
         if (parsed.intent !== 'create_reminder') {
             await sendMessage(from, "Sorry, I didn't understand that. Try: 'remind me to [task] at [time]'");
-            return res.status(200).send('OK');
+            // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+            res.type('text/xml');
+            return res.send('<Response></Response>');
         }
 
         // Validate AI output
         if (!parsed.task) {
             await sendMessage(from, "I couldn't understand what to remind you about. Please try again.");
-            return res.status(200).send('OK');
+            // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+            res.type('text/xml');
+            return res.send('<Response></Response>');
         }
 
         if (!parsed.datetime || !isValidDatetime(parsed.datetime)) {
             await sendMessage(from, "I couldn't understand the time. Please specify when you want to be reminded.");
-            return res.status(200).send('OK');
+            // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+            res.type('text/xml');
+            return res.send('<Response></Response>');
         }
 
         // Use parsed timezone if provided (e.g. "9am EST"), otherwise fallback to user's pref
@@ -90,7 +100,9 @@ router.post('/whatsapp', async (req, res) => {
         // Validate reminder is in the future
         if (!isFutureDate(remindAtUTC)) {
             await sendMessage(from, "The reminder time has already passed. Please specify a future time.");
-            return res.status(200).send('OK');
+            // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+            res.type('text/xml');
+            return res.send('<Response></Response>');
         }
 
         // Find or create user (update timezone if new one detected)
@@ -105,7 +117,9 @@ router.post('/whatsapp', async (req, res) => {
             // Check for unique constraint violation on message_sid
             if (error.code === 'P2002' && error.meta?.target?.includes('message_sid')) {
                 console.log(`Duplicate reminder request ignored (MessageSid: ${messageSid})`);
-                return res.status(200).send('OK'); // Idempotent success
+                // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+                res.type('text/xml');
+                return res.send('<Response></Response>'); // Idempotent success
             }
             throw error; // Re-throw other errors
         }
