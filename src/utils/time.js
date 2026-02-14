@@ -27,7 +27,8 @@ function toUTCDate(datetimeString, timezone) {
             });
 
             // Get the offset for the timezone
-            const localDate = new Date(datetimeString);
+            // Treat the input string as UTC to start with, so we can determine the timezone offset relative to it
+            const localDate = new Date(datetimeString + 'Z');
             const utcDate = new Date(localDate.toLocaleString('en-US', { timeZone: 'UTC' }));
             const tzDate = new Date(localDate.toLocaleString('en-US', { timeZone: timezone }));
             const offset = utcDate - tzDate;

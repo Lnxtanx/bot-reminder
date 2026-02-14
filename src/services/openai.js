@@ -43,36 +43,36 @@ JSON Schema:
 }`;
 
     try {
-        console.log('Attempting to parse with OpenAI...');
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: messageBody },
-            ],
-            temperature: 0,
-            max_tokens: 200,
-        });
+        console.log('Attempting to parse with Gemini...');
+        const result = await geminiModel.generateContent([
+            systemPrompt,
+            `User Message: ${messageBody}`
+        ]);
+        const response = await result.response;
+        const text = response.text();
+        return parseJSONResponse(text);
 
-        const content = response.choices[0]?.message?.content?.trim();
-        return parseJSONResponse(content);
+    } catch (geminiError) {
+        console.error('Gemini failed:', geminiError.message);
 
-    } catch (error) {
-        console.error('OpenAI failed:', error.message);
-
-        // Fallback to Gemini if configured
-        if (process.env.GEMINI_API_KEY) {
-            console.log('Falling back to Gemini...');
+        // Fallback to OpenAI
+        if (process.env.OPENAI_API_KEY) {
+            console.log('Falling back to OpenAI...');
             try {
-                const result = await geminiModel.generateContent([
-                    systemPrompt,
-                    `User Message: ${messageBody}`
-                ]);
-                const response = await result.response;
-                const text = response.text();
-                return parseJSONResponse(text);
-            } catch (geminiError) {
-                console.error('Gemini fallback failed:', geminiError.message);
+                const response = await openai.chat.completions.create({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: messageBody },
+                    ],
+                    temperature: 0,
+                    max_tokens: 200,
+                });
+
+                const content = response.choices[0]?.message?.content?.trim();
+                return parseJSONResponse(content);
+            } catch (openaiError) {
+                console.error('OpenAI fallback failed:', openaiError.message);
             }
         }
 

@@ -1,0 +1,6 @@
+--- Testing Timezone Conversion ---
+Input: 2026-02-14T15:43:00 (Asia/Kolkata)
+Converted UTC Object: Sat Feb 14 2026 15:43:00 GMT+0530 (India Standard Time)
+Converted UTC ISO:    2026-02-14T10:13:00.000Z
+Server Now:           2026-02-14T10:17:31.118Z
+⚠️  Converted date is in the PAST/PRESENT (Likely causing immediate trigger)
