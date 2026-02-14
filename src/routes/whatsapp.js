@@ -130,8 +130,9 @@ router.post('/whatsapp', async (req, res) => {
         // Send confirmation
         await sendReminderConfirmation(from, parsed.task, formattedTime);
 
-        // Return 200 to acknowledge Twilio webhook
-        res.status(200).send('OK');
+        // Return valid empty TwiML to avoid "Content is not allowed in prolog" error
+        res.type('text/xml');
+        res.send('<Response></Response>');
 
     } catch (error) {
         console.error('Webhook error:', error);
