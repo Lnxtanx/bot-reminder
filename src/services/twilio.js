@@ -1,4 +1,5 @@
 const twilio = require('twilio');
+const { normalizeWhatsAppNumber } = require('../utils/phone');
 
 let client;
 const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886';
@@ -28,9 +29,12 @@ try {
  */
 async function sendMessage(to, body) {
     try {
+        const normalizedTo = normalizeWhatsAppNumber(to);
+        const normalizedFrom = normalizeWhatsAppNumber(TWILIO_WHATSAPP_NUMBER);
+
         const message = await client.messages.create({
-            from: TWILIO_WHATSAPP_NUMBER,
-            to: to,
+            from: normalizedFrom,
+            to: normalizedTo,
             body: body,
         });
 

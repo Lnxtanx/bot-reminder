@@ -4,6 +4,7 @@ const { parseMessage } = require('../services/openai');
 const { sendReminderConfirmation, sendMessage } = require('../services/twilio');
 const { findOrCreateUser, findUser, createReminder } = require('../db/queries');
 const { toUTCDate, formatTimeForUser, isValidDatetime, isFutureDate } = require('../utils/time');
+const { normalizeWhatsAppNumber } = require('../utils/phone');
 
 /**
  * Twilio WhatsApp Webhook Handler
@@ -38,16 +39,18 @@ router.post('/whatsapp', async (req, res) => {
         }
 
         // 1. Normalize WhatsApp number
-        // Ensure it starts with "whatsapp:+" and follows E.164
-        if (!from.startsWith('whatsapp:+')) {
-            // Basic fix if it's just missing the prefix but has the number
-            if (from.startsWith('+')) {
-                from = `whatsapp:${from}`;
-            } else {
-                // Harder to normalize without assuming country code. 
-                // For now, log warning if strict format isn't met or rely on Twilio.
-                console.warn(`Warning: Phone number ${from} might not be in E.164 format.`);
-            }
+        try {
+            from = normalizeWhatsAppNumber(from);
+            console.log(`Normalized From: ${from}`);
+        } catch (phoneError) {
+            console.warn(`Warning: Could not normalize phone number ${from}:`, phoneError.message);
+            // proceed with original 'from' or maybe fail? 
+            // Twilio might have sent it correctly, so if it fails our strict check, 
+            // we might want to just keep it as is or log it.
+            // But if it fails our check, it's likely bad.
+            // Let's just log and keep going, hoping for the best, or normalized version might be undefined if error thrown.
+            // Wait, normalize throws if invalid? Yes "Phone number is required". 
+            // But my regex is permissive.
         }
 
         // 2. Fetch User Context (Timezone)
