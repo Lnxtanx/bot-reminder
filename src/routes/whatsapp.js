@@ -19,6 +19,14 @@ router.post('/whatsapp', async (req, res) => {
         const messageBody = req.body.Body;
         const messageSid = req.body.MessageSid;
 
+        // 0. SELF-LOOP PREVENTION
+        // Ignore messages sent by the bot itself
+        const botNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+        if (botNumber && from === botNumber) {
+            console.log('Ignoring own message from:', from);
+            return res.status(200).send('OK');
+        }
+
         console.log(`Received message from ${from}: ${messageBody} (IDs: ${messageSid})`);
 
         // Validate required fields
@@ -48,6 +56,13 @@ router.post('/whatsapp', async (req, res) => {
         // Parse message with AI (AI is parser only - no business logic)
         const parsed = await parseMessage(messageBody);
         console.log('AI parsed:', JSON.stringify(parsed, null, 2));
+
+        // Check for AI failure (Quota exceeded / API down)
+        if (parsed.error === 'AI services unavailable') {
+            console.error('AI Service Error:', parsed.error);
+            await sendMessage(from, "I'm currently overloaded and running low on fuel ⛽. Please try again in 10 minutes.");
+            return res.status(200).send('OK');
+        }
 
         // Backend handles all decision making
         if (parsed.intent !== 'create_reminder') {

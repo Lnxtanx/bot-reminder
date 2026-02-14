@@ -9,6 +9,16 @@ const openai = new OpenAI({
  * Parse user message to extract reminder intent, task, datetime, and timezone
  * AI is ONLY a parser - no business logic here
  */
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+/**
+ * Parse user message to extract reminder intent, task, datetime, and timezone
+ * AI is ONLY a parser - no business logic here
+ */
 async function parseMessage(messageBody) {
     const currentTime = getCurrentISOTime();
 
@@ -32,19 +42,51 @@ JSON Schema:
   "timezone": "<IANA timezone identifier>"
 }`;
 
-    const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: messageBody },
-        ],
-        temperature: 0,
-        max_tokens: 200,
-    });
+    try {
+        console.log('Attempting to parse with OpenAI...');
+        const response = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: messageBody },
+            ],
+            temperature: 0,
+            max_tokens: 200,
+        });
 
-    const content = response.choices[0]?.message?.content?.trim();
+        const content = response.choices[0]?.message?.content?.trim();
+        return parseJSONResponse(content);
 
-    // Parse JSON response
+    } catch (error) {
+        console.error('OpenAI failed:', error.message);
+
+        // Fallback to Gemini if configured
+        if (process.env.GEMINI_API_KEY) {
+            console.log('Falling back to Gemini...');
+            try {
+                const result = await geminiModel.generateContent([
+                    systemPrompt,
+                    `User Message: ${messageBody}`
+                ]);
+                const response = await result.response;
+                const text = response.text();
+                return parseJSONResponse(text);
+            } catch (geminiError) {
+                console.error('Gemini fallback failed:', geminiError.message);
+            }
+        }
+
+        return {
+            intent: 'unknown',
+            task: null,
+            datetime: null,
+            timezone: null,
+            error: 'AI services unavailable',
+        };
+    }
+}
+
+function parseJSONResponse(content) {
     try {
         // Remove markdown code blocks if present
         let jsonStr = content;
@@ -61,13 +103,10 @@ JSON Schema:
 
         return parsed;
     } catch (error) {
-        console.error('Failed to parse OpenAI response:', content);
+        console.error('Failed to parse AI response:', content);
         return {
             intent: 'unknown',
-            task: null,
-            datetime: null,
-            timezone: null,
-            error: 'Failed to parse AI response',
+            error: 'Failed to parse JSON',
         };
     }
 }
