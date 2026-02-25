@@ -9,16 +9,6 @@ const openai = new OpenAI({
  * Parse user message to extract reminder intent, task, datetime, and timezone
  * AI is ONLY a parser - no business logic here
  */
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const geminiModel = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-/**
- * Parse user message to extract reminder intent, task, datetime, and timezone
- * AI is ONLY a parser - no business logic here
- */
 async function parseMessage(messageBody) {
     const currentTime = getCurrentISOTime();
 
@@ -42,40 +32,33 @@ JSON Schema:
   "timezone": "<IANA timezone identifier>"
 }`;
 
+    if (!process.env.OPENAI_API_KEY) {
+        console.error('OpenAI API key missing');
+        return {
+            intent: 'unknown',
+            task: null,
+            datetime: null,
+            timezone: null,
+            error: 'AI services unavailable',
+        };
+    }
+
     try {
-        console.log('Attempting to parse with Gemini...');
-        const result = await geminiModel.generateContent([
-            systemPrompt,
-            `User Message: ${messageBody}`
-        ]);
-        const response = await result.response;
-        const text = response.text();
-        return parseJSONResponse(text);
+        console.log('Attempting to parse with OpenAI...');
+        const response = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: messageBody },
+            ],
+            temperature: 0,
+            max_tokens: 200,
+        });
 
-    } catch (geminiError) {
-        console.error('Gemini failed:', geminiError.message);
-
-        // Fallback to OpenAI
-        if (process.env.OPENAI_API_KEY) {
-            console.log('Falling back to OpenAI...');
-            try {
-                const response = await openai.chat.completions.create({
-                    model: 'gpt-4o-mini',
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: messageBody },
-                    ],
-                    temperature: 0,
-                    max_tokens: 200,
-                });
-
-                const content = response.choices[0]?.message?.content?.trim();
-                return parseJSONResponse(content);
-            } catch (openaiError) {
-                console.error('OpenAI fallback failed:', openaiError.message);
-            }
-        }
-
+        const content = response.choices[0]?.message?.content?.trim();
+        return parseJSONResponse(content);
+    } catch (openaiError) {
+        console.error('OpenAI parsing failed:', openaiError.message);
         return {
             intent: 'unknown',
             task: null,
